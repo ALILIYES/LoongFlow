@@ -6,9 +6,9 @@ workspace_path: "./output"
 # Global LLM configuration. This will be used by any component that
 # does not have its own specific llm_config defined.
 llm_config:
-  url: "https://qianfan.baidubce.com/v2"
-  api_key: "******"
-  model: "deepseek-v3.2"
+  url: "https://api.deepseek.com/v1"
+  api_key: "sk-9099b5507bb3481d86398890fb317748"
+  model: "openai/deepseek-v4-pro"
   temperature: 0.8
   context_length: 128000
   max_tokens: 16384
@@ -69,3 +69,4 @@ evolve:
     population_size: 30
     checkpoint_interval: 5
     sampling_weight_power: 1.0
+

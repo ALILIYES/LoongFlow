@@ -7,6 +7,8 @@ import abc
 import importlib.util
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 import traceback
@@ -71,6 +73,16 @@ class EvoCoderEvaluator(LoongFlowEvaluator, abc.ABC):
             f"[Child PID:{pid}] Started. Evaluator path: {evaluator_file_path}"
         )
         logger.debug(f"[Child PID:{pid}] Target LLM path: {llm_file_path}")
+
+        _ensure_dependencies(llm_file_path, logger)
+
+        # ---- CUDA safety: prevent nested multiprocessing from deadlocking ----
+        os.environ.setdefault("CUDA_LAUNCH_BLOCKING", "1")
+        os.environ.setdefault("OMP_NUM_THREADS", "1")
+        import torch
+        torch.set_num_threads(1)
+        if torch.cuda.is_available():
+            torch.cuda.set_per_process_memory_fraction(0.9)
 
         try:
             # 1. Dynamically load the LLM code module
@@ -938,3 +950,67 @@ def evaluate(temp_dir):
     except Exception as e:
         return {{"score": 0.0, "status": "validation_failed", "summary": f"{{e}}", "artifacts": {{"traceback": traceback.format_exc()}}}}
 """
+
+def _ensure_dependencies(llm_file_path: str, logger) -> None:
+    """Scan LLM-generated code for imports, install any missing packages in batch."""
+    try:
+        with open(llm_file_path, "r", encoding="utf-8") as f:
+            code = f.read()
+    except Exception:
+        return
+
+    import_pattern = re.compile(
+        r"^\\s*(?:from\s+(\S+)\s+import|import\s+(\S+))",
+        re.MULTILINE,
+    )
+    candidates = set()
+    for m in import_pattern.finditer(code):
+        pkg = m.group(1) or m.group(2)
+        if pkg:
+            top = pkg.split(".")[0]
+            if top and not top.startswith("_"):
+                candidates.add(top)
+
+    stdlib_ignores = {
+        "os", "sys", "re", "json", "time", "math", "abc", "pathlib",
+        "typing", "collections", "itertools", "functools", "dataclasses",
+        "traceback", "subprocess", "importlib", "io", "csv", "pickle",
+        "random", "hashlib", "uuid", "copy", "string", "textwrap",
+        "argparse", "logging", "warnings", "gc", "inspect", "ast",
+        "enum", "types", "builtins", "contextlib", "shutil", "tempfile",
+        "base64", "html", "xml", "urllib", "http", "socket", "email",
+        "struct", "threading", "multiprocessing", "asyncio", "concurrent",
+        "ctypes", "platform", "signal", "mmap", "glob", "fnmatch",
+        "getpass", "getopt", "configparser", "secrets", "statistics",
+        "decimal", "fractions", "numbers", "datetime", "calendar",
+        "bisect", "heapq", "array", "queue", "weakref", "pprint",
+        "reprlib", "operator", "keyword", "tokenize", "linecache",
+        "bz2", "gzip", "lzma", "tarfile", "zipfile", "zlib",
+        "unittest", "doctest", "pdb", "profile", "timeit",
+        "codecs", "unicodedata", "stringprep", "difflib",
+    }
+
+    missing = []
+    for pkg in sorted(candidates):
+        if pkg in stdlib_ignores:
+            continue
+        try:
+            importlib.import_module(pkg)
+        except ImportError:
+            missing.append(pkg)
+
+    if not missing:
+        return
+
+    logger.info(f"[Deps] Installing {len(missing)} missing packages: {missing}")
+    for pkg in missing:
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", pkg],
+                capture_output=True,
+                timeout=120,
+            )
+            logger.info(f"[Deps] Installed: {pkg}")
+        except Exception as e:
+            logger.warning(f"[Deps] Failed to install {pkg}: {e}")
+

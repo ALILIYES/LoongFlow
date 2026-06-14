@@ -140,7 +140,10 @@ class LoongFlowEvaluator(Evaluator):
     def _run_evaluate_target(evaluator_file_path: str, llm_file_path: str):
         """
         Run the evaluator code in a separate process and write results to a file.
+        
+        Set HF mirror before any imports so spawned subprocesses can download models.
         """
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
         base_dir = os.path.dirname(evaluator_file_path)
         output_file_path = os.path.join(base_dir, "evaluation_result.json")
         log_file_path = os.path.join(base_dir, "evaluation_process.log")
@@ -226,7 +229,7 @@ class LoongFlowEvaluator(Evaluator):
 
         # Note: We no longer pass a Queue
         process_args = (evaluator_file_path, llm_file_path)
-        process = multiprocessing.Process(
+        process = multiprocessing.get_context("spawn").Process(
             target=self.__class__._run_evaluate_target, args=process_args
         )
 

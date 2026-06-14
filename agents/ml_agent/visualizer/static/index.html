@@ -1,0 +1,35 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Agent Dashboard</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>ML Agent Dashboard</h1>
+            <div class="header-actions">
+                <span id="autoRefreshLabel" style="font-size:11px;color:var(--text-secondary);margin-right:8px">Auto: ON (10s)</span>
+                <button id="autoRefreshBtn" class="btn">Pause</button>
+                <button id="refreshBtn" class="btn btn-primary">Refresh</button>
+            </div>
+        </header>
+        <div class="main">
+            <aside class="sidebar">
+                <h3>Runs</h3>
+                <div id="runList" class="run-list">
+                    <div class="loading">Loading runs...</div>
+                </div>
+            </aside>
+            <main id="content" class="content">
+                <div class="empty-state">
+                    Select a run from the sidebar to view details
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
